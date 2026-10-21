@@ -1,0 +1,369 @@
+<title>CartPole</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  /* Layout: one centered column — track first, live state gauges, then controls. */
+  :root {
+    --bg: #eaeef2;
+    --surface: #f8fafc;
+    --ink: #142029;
+    --muted: #5a6a78;
+    --line: #c9d3dc;
+    --cart: #1d2b36;
+    --pole: #d9822b;
+    --accent: #2b59c3;
+    --danger: #c2372f;
+    --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Atkinson Hyperlegible", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e141a; --surface: #161f28; --ink: #e2e8ee; --muted: #8c9aa8;
+      --line: #2a3744; --cart: #cfd8e1; --pole: #f0a24a; --accent: #7ea2ff; --danger: #ff6b5f;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e141a; --surface: #161f28; --ink: #e2e8ee; --muted: #8c9aa8;
+    --line: #2a3744; --cart: #cfd8e1; --pole: #f0a24a; --accent: #7ea2ff; --danger: #ff6b5f;
+    color-scheme: dark;
+  }
+
+  html, body { min-height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.5;
+    padding-block: 32px 48px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    display: grid;
+    gap: 20px;
+  }
+
+  header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; }
+  h1 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(2rem, 6vw, 3rem);
+    letter-spacing: -0.02em;
+    line-height: 1;
+    text-wrap: balance;
+  }
+  h1 span { color: var(--pole); }
+  .scores { display: flex; gap: 24px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .score-label { display: block; font-family: var(--font-body); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .score-value { font-size: 28px; font-weight: 600; line-height: 1.1; }
+  .score-value small { font-size: 14px; color: var(--muted); font-weight: 400; }
+
+  .stage {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  canvas { display: block; width: 100%; aspect-ratio: 3 / 2; max-width: 100%; }
+  .overlay {
+    position: absolute;
+    inset: auto 0 16px;
+    text-align: center;
+    font-size: 15px;
+    color: var(--muted);
+    pointer-events: none;
+  }
+  .overlay strong { color: var(--ink); }
+
+  .gauges {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px 20px;
+  }
+  .gauge { display: grid; gap: 6px; min-width: 0; }
+  .gauge-head { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+  .gauge-name { color: var(--muted); }
+  .gauge-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .bar { position: relative; height: 6px; border-radius: 3px; background: var(--line); }
+  .bar::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--muted); }
+  .bar-fill { position: absolute; top: 0; bottom: 0; left: 50%; border-radius: 3px; background: var(--accent); }
+  .gauge.is-near-limit .bar-fill { background: var(--danger); }
+  .gauge.is-near-limit .gauge-value { color: var(--danger); }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .push { display: flex; gap: 8px; flex: 1 1 240px; }
+  button, select {
+    font: inherit;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 16px;
+    cursor: pointer;
+  }
+  button:hover, select:hover { border-color: var(--muted); }
+  button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .push button {
+    flex: 1;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 18px;
+    padding-block: 14px;
+    touch-action: none;
+    user-select: none;
+  }
+  .push button.is-pressed { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+  .mode { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+
+  .notes { font-size: 14px; color: var(--muted); max-width: 65ch; margin: 0; }
+  kbd {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    border: 1px solid var(--line);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 1px 6px;
+    color: var(--ink);
+  }
+</style>
+
+<main>
+  <header>
+    <h1>Cart<span>Pole</span></h1>
+    <div class="scores">
+      <div><span class="score-label">Steps</span><span class="score-value" id="score">0<small>/500</small></span></div>
+      <div><span class="score-label">Best</span><span class="score-value" id="best">0</span></div>
+    </div>
+  </header>
+
+  <div class="stage">
+    <canvas id="game" width="720" height="480" aria-label="Cart on a track balancing a pole"></canvas>
+    <div class="overlay" id="overlay"><strong>Press ← or → to start.</strong> Keep the pole within 12° and the cart on the track.</div>
+  </div>
+
+  <div class="gauges" aria-live="off">
+    <div class="gauge" data-index="0" data-limit="2.4">
+      <div class="gauge-head"><span class="gauge-name">Cart position</span><span class="gauge-value">0.00 m</span></div>
+      <div class="bar"><div class="bar-fill"></div></div>
+    </div>
+    <div class="gauge" data-index="1" data-limit="3">
+      <div class="gauge-head"><span class="gauge-name">Cart velocity</span><span class="gauge-value">0.00 m/s</span></div>
+      <div class="bar"><div class="bar-fill"></div></div>
+    </div>
+    <div class="gauge" data-index="2" data-limit="0.20944">
+      <div class="gauge-head"><span class="gauge-name">Pole angle</span><span class="gauge-value">0.0°</span></div>
+      <div class="bar"><div class="bar-fill"></div></div>
+    </div>
+    <div class="gauge" data-index="3" data-limit="3">
+      <div class="gauge-head"><span class="gauge-name">Angular velocity</span><span class="gauge-value">0.00 rad/s</span></div>
+      <div class="bar"><div class="bar-fill"></div></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="push">
+      <button id="push-left" type="button" aria-label="Push left">← Push</button>
+      <button id="push-right" type="button" aria-label="Push right">Push →</button>
+    </div>
+    <label class="mode" for="mode">
+      Controller
+      <select id="mode">
+        <option value="human">You</option>
+        <option value="random">Random agent</option>
+      </select>
+    </label>
+    <label class="mode" for="speed">
+      Speed
+      <select id="speed">
+        <option value="0.25">0.25×</option>
+        <option value="0.5" selected>0.5×</option>
+        <option value="0.75">0.75×</option>
+        <option value="1">1× (real time)</option>
+      </select>
+    </label>
+    <button id="reset" type="button">Restart</button>
+  </div>
+
+  <p class="notes">
+    Each step simulates 20 ms and pushes the cart with 10 N left or right; there is no "do nothing".
+    The run ends when the pole tips past 12°, the cart passes ±2.4 m, or you survive 500 steps.
+    Lower speeds slow the clock down without changing the physics.
+    Hold <kbd>←</kbd> <kbd>→</kbd> or the buttons; press <kbd>R</kbd> to restart. Same physics as Gymnasium CartPole-v1.
+  </p>
+</main>
+
+<script type="module">
+  import { CartPoleEnv, SPEC, ACTION_LEFT, ACTION_RIGHT, DEFAULT_MAX_STEPS } from "./js/cartpole.js";
+  import { CartPoleRenderer } from "./js/renderer.js";
+
+  const STEP_MS = SPEC.timeStep * 1000;
+  const MAX_FRAME_GAP_MS = 250;
+  const NEAR_LIMIT_RATIO = 0.75;
+  const RADIANS_TO_DEGREES = 180 / Math.PI;
+  const BEST_KEY = "cartpole-best";
+
+  const canvas = document.getElementById("game");
+  const overlay = document.getElementById("overlay");
+  const scoreLabel = document.getElementById("score");
+  const bestLabel = document.getElementById("best");
+  const modeSelect = document.getElementById("mode");
+  const speedSelect = document.getElementById("speed");
+  const gauges = [...document.querySelectorAll(".gauge")];
+  const pushButtons = { left: document.getElementById("push-left"), right: document.getElementById("push-right") };
+
+  const env = new CartPoleEnv();
+  const renderer = new CartPoleRenderer(canvas);
+  let observation = env.reset().observation;
+  let score = 0;
+  let best = readBest();
+  let isRunning = false;
+  let lastAction = ACTION_RIGHT;
+  let accumulatedMs = 0;
+  let lastFrameTime = performance.now();
+  const held = { left: false, right: false };
+
+  function readBest() {
+    try { return Number(localStorage.getItem(BEST_KEY)) || 0; } catch { return 0; }
+  }
+  function saveBest() {
+    try { localStorage.setItem(BEST_KEY, String(best)); } catch { /* storage unavailable; best lasts this visit only */ }
+  }
+
+  function themeColors() {
+    const styles = getComputedStyle(document.documentElement);
+    const token = (name) => styles.getPropertyValue(name).trim();
+    return { background: token("--surface"), track: token("--muted"), cart: token("--cart"), pole: token("--pole"), axle: token("--accent") };
+  }
+
+  function fitCanvas() {
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = Math.round(canvas.clientWidth * ratio);
+    canvas.height = Math.round(canvas.clientHeight * ratio);
+  }
+
+  function showOverlay(html) {
+    overlay.innerHTML = html;
+    overlay.hidden = !html;
+  }
+
+  function restart() {
+    observation = env.reset().observation;
+    score = 0;
+    isRunning = modeSelect.value !== "human";
+    showOverlay(isRunning ? "" : "<strong>Press ← or → to start.</strong> Keep the pole within 12° and the cart on the track.");
+    updateHud();
+  }
+
+  function chooseAction() {
+    if (modeSelect.value === "random") return Math.random() < 0.5 ? ACTION_LEFT : ACTION_RIGHT;
+    if (held.left && !held.right) return ACTION_LEFT;
+    if (held.right && !held.left) return ACTION_RIGHT;
+    // No neutral action exists, so alternating pushes approximates coasting.
+    lastAction = lastAction === ACTION_LEFT ? ACTION_RIGHT : ACTION_LEFT;
+    return lastAction;
+  }
+
+  function endMessage(result) {
+    if (result.truncated) return `<strong>Balanced for all ${DEFAULT_MAX_STEPS} steps.</strong> Press R to go again.`;
+    const [x, , theta] = result.observation;
+    const reason = Math.abs(x) > SPEC.xThreshold ? "The cart left the track" : `The pole tipped to ${Math.abs(theta * RADIANS_TO_DEGREES).toFixed(1)}°`;
+    return `<strong>${reason} after ${score} steps.</strong> Press R or Restart.`;
+  }
+
+  function tick() {
+    const result = env.step(chooseAction());
+    observation = result.observation;
+    score += result.reward;
+    if (score > best) { best = score; saveBest(); }
+    if (result.terminated || result.truncated) {
+      isRunning = false;
+      if (modeSelect.value === "random") { restart(); return; }
+      showOverlay(endMessage(result));
+    }
+  }
+
+  function updateHud() {
+    scoreLabel.innerHTML = `${score}<small>/${DEFAULT_MAX_STEPS}</small>`;
+    bestLabel.textContent = String(best);
+    const formats = [
+      (v) => `${v.toFixed(2)} m`,
+      (v) => `${v.toFixed(2)} m/s`,
+      (v) => `${(v * RADIANS_TO_DEGREES).toFixed(1)}°`,
+      (v) => `${v.toFixed(2)} rad/s`,
+    ];
+    gauges.forEach((gauge) => {
+      const index = Number(gauge.dataset.index);
+      const value = observation[index];
+      const ratio = Math.max(-1, Math.min(1, value / Number(gauge.dataset.limit)));
+      const fill = gauge.querySelector(".bar-fill");
+      fill.style.left = `${50 + Math.min(ratio, 0) * 50}%`;
+      fill.style.width = `${Math.abs(ratio) * 50}%`;
+      gauge.querySelector(".gauge-value").textContent = formats[index](value);
+      gauge.classList.toggle("is-near-limit", Math.abs(ratio) >= NEAR_LIMIT_RATIO && index !== 1 && index !== 3);
+    });
+  }
+
+  // Fixed-timestep loop: each physics step is always 20 ms of simulated time;
+  // the speed setting only stretches how much wall-clock time a step takes.
+  function frame(now) {
+    const stepWallMs = STEP_MS / Number(speedSelect.value);
+    accumulatedMs += Math.min(now - lastFrameTime, MAX_FRAME_GAP_MS);
+    lastFrameTime = now;
+    if (!isRunning) accumulatedMs = 0;
+    while (isRunning && accumulatedMs >= stepWallMs) {
+      tick();
+      accumulatedMs -= stepWallMs;
+    }
+    renderer.colors = themeColors();
+    renderer.draw(observation);
+    updateHud();
+    requestAnimationFrame(frame);
+  }
+
+  function press(side, isDown) {
+    held[side] = isDown;
+    pushButtons[side].classList.toggle("is-pressed", isDown);
+    if (isDown && !isRunning && !env.isDone && modeSelect.value === "human") {
+      isRunning = true;
+      showOverlay("");
+    }
+  }
+
+  const KEY_SIDES = { ArrowLeft: "left", a: "left", ArrowRight: "right", d: "right" };
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "r" || event.key === "R") { restart(); return; }
+    const side = KEY_SIDES[event.key];
+    if (!side) return;
+    event.preventDefault();
+    if (env.isDone) restart();
+    press(side, true);
+  });
+  window.addEventListener("keyup", (event) => {
+    const side = KEY_SIDES[event.key];
+    if (side) press(side, false);
+  });
+  Object.entries(pushButtons).forEach(([side, button]) => {
+    button.addEventListener("pointerdown", (event) => {
+      button.setPointerCapture(event.pointerId);
+      if (env.isDone) restart();
+      press(side, true);
+    });
+    ["pointerup", "pointercancel"].forEach((type) => button.addEventListener(type, () => press(side, false)));
+  });
+  modeSelect.addEventListener("change", restart);
+  document.getElementById("reset").addEventListener("click", restart);
+  window.addEventListener("resize", fitCanvas);
+
+  fitCanvas();
+  restart();
+  requestAnimationFrame(frame);
+</script>

@@ -1,0 +1,16 @@
+{
+  "name": "cartpole-env",
+  "version": "0.1.0",
+  "description": "CartPole environment in JavaScript, playable in the browser and trainable from Python",
+  "type": "module",
+  "main": "js/cartpole.js",
+  "exports": {
+    ".": "./js/cartpole.js",
+    "./renderer": "./js/renderer.js"
+  },
+  "scripts": {
+    "serve": "python3 -m http.server 8000",
+    "test": "node --test js/"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CartPole</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 24px 16px;
+        font-family: system-ui, sans-serif;
+        background: #f6f8fa;
+        color: #1f2328;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+      }
+      canvas {
+        width: 100%;
+        max-width: 600px;
+        background: #fff;
+        border: 1px solid #d0d7de;
+        border-radius: 8px;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        justify-content: center;
+      }
+      .stats {
+        font-variant-numeric: tabular-nums;
+      }
+      .hint {
+        color: #59636e;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>CartPole</h1>
+    <canvas id="game" width="600" height="400"></canvas>
+    <div class="controls">
+      <label>
+        Controller
+        <select id="mode">
+          <option value="human">Human (← / →)</option>
+          <option value="random">Random agent</option>
+        </select>
+      </label>
+      <button id="reset">Reset</button>
+    </div>
+    <div class="stats">
+      Score: <span id="score">0</span> · Best: <span id="best">0</span>
+    </div>
+    <div class="hint">Hold ← or → to push the cart. Keep the pole upright.</div>
+
+    <script type="module">
+      import { CartPoleEnv, SPEC, ACTION_LEFT, ACTION_RIGHT } from "../js/cartpole.js";
+      import { CartPoleRenderer } from "../js/renderer.js";
+
+      const env = new CartPoleEnv();
+      const renderer = new CartPoleRenderer(document.getElementById("game"));
+      const modeSelect = document.getElementById("mode");
+      const scoreLabel = document.getElementById("score");
+      const bestLabel = document.getElementById("best");
+
+      const STEP_MS = SPEC.timeStep * 1000;
+      let observation = env.reset().observation;
+      let score = 0;
+      let best = 0;
+      let lastAction = ACTION_RIGHT;
+      let accumulatedMs = 0;
+      let lastFrameTime = performance.now();
+      const heldKeys = new Set();
+
+      function resetEpisode() {
+        observation = env.reset().observation;
+        score = 0;
+        scoreLabel.textContent = "0";
+      }
+
+      function chooseAction() {
+        const mode = modeSelect.value;
+        if (mode === "random") {
+          return Math.random() < 0.5 ? ACTION_LEFT : ACTION_RIGHT;
+        }
+        if (heldKeys.has("ArrowLeft")) return ACTION_LEFT;
+        if (heldKeys.has("ArrowRight")) return ACTION_RIGHT;
+        // CartPole has no "do nothing" action, so alternate to approximate it.
+        lastAction = lastAction === ACTION_LEFT ? ACTION_RIGHT : ACTION_LEFT;
+        return lastAction;
+      }
+
+      function tick() {
+        if (env.isDone) {
+          resetEpisode();
+          return;
+        }
+        const result = env.step(chooseAction());
+        observation = result.observation;
+        score += result.reward;
+        best = Math.max(best, score);
+        scoreLabel.textContent = String(score);
+        bestLabel.textContent = String(best);
+      }
+
+      // Fixed-timestep loop: physics runs at 50 Hz regardless of display refresh rate.
+      function frame(now) {
+        accumulatedMs += Math.min(now - lastFrameTime, 250);
+        lastFrameTime = now;
+        while (accumulatedMs >= STEP_MS) {
+          tick();
+          accumulatedMs -= STEP_MS;
+        }
+        renderer.draw(observation);
+        requestAnimationFrame(frame);
+      }
+
+      modeSelect.addEventListener("change", resetEpisode);
+      document.getElementById("reset").addEventListener("click", resetEpisode);
+      window.addEventListener("keydown", (event) => {
+        if (event.key.startsWith("Arrow")) event.preventDefault();
+        heldKeys.add(event.key);
+      });
+      window.addEventListener("keyup", (event) => heldKeys.delete(event.key));
+
+      requestAnimationFrame(frame);
+    </script>
+  </body>
+</html>
